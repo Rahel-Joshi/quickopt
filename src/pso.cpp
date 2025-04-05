@@ -43,24 +43,20 @@ std::vector<T> pso(
     }
 
     // Particle class - represents each particle in the swarm, storing its parameters (position), velocity, and value
-    class Particle {
-    public:
-        std::vector<T> position; // Position of each particle 
-        std::vector<T> velocity; // Velocity of each particle
+    class ParticleSwarm {
+        public:
+            std::vector<std::vector<T>> positions; // Position of each particle
+            std::vector<std::vector<T>> velocities; // Velocity of each particle
+            std::vector<std::vector<T>> pb_pos; // Personal best position of each particle
+            std::vector<double> values; // Value of each particle
+            std::vector<double> pb_vals; // Personal best value of each particle
 
-        std::vector<T> pb_pos; // Personal best position of each particle
-
-        double value; // Value of each particle
-
-        double pb_val; // Personal best value of each particle
-        
-        // Constructor to initialize position, velocity, and value
-        Particle(const std::vector<T>& p, const std::vector<T>& v, double val)
-            : position(p), velocity(v), pb_pos(p), value(val), pb_val(val) {}
+            ParticleSwarm(const std::vector<std::vector<T>>& pos, const std::vector<std::vector<T>>& vel, std::vector<double> val)
+                : positions(pos), velocities(vel), pb_pos(pos), values(val), pb_values(val) {}
     };
 
     // Initialize the swarm
-    std::vector<Particle> swarm; // Vector to store the particles in the swarm
+
     std::mt19937 rng(std::random_device{}()); // Random number generator
     std::uniform_real_distribution<> dist_space(0.0, 1.0); // Uniform distribution for initial space
     std::uniform_real_distribution<> dist_velocity(-clamp, clamp); // Uniform distribution for initial velocity
@@ -68,6 +64,11 @@ std::vector<T> pso(
 
     std::vector<T> gb_pos; // Initialize the global best position value
     double gb_val = std::numeric_limits<double>::lowest(); // Initialize the global best value
+
+
+    std::vector<std::vector<T>> pos;
+    std::vector<std::vector<T>> vel;
+    std::vector<double> val;
 
     // Initialize the particles
     for (int i = 0; i < swarm_size; ++i) { // For every proposed particle in swarm size...
@@ -86,13 +87,16 @@ std::vector<T> pso(
             gb_val = value; // Update the global best value
             gb_pos = position; // Update the global best position
         }
-
-        swarm.push_back(Particle(position, velocity, value)); // Add the particle to the swarm
+        pos.push_back(position);
+        vel.push_back(velocity);
+        val.push_back(value);
     }
+    ParticleSwarm swarm = ParticleSwarm(pos, vel, val);
 
     // Run the optimization 
     for (int i = 0; i < iterations; ++i){ // For every iteration...
-        for (auto& particle : swarm) { // For each particle in the swarm...
+        for (int k = 0; k < swarm_size; k++) { // For each particle in the swarm...
+
             std::vector<T> proposed_velocity; // Create a vector to store the new velocity
             std::vector<T> proposed_position; // Create a vector to store the new position
 
@@ -100,22 +104,22 @@ std::vector<T> pso(
             for (int j = 0; j < space_min.size(); ++j) { // For every individual parameter in the function...
                 double r1 = dist_inertia(rng); // Generate a random factor r1
                 double r2 = dist_inertia(rng); // Generate a random factor r2
-                double proposed_velo_param = inertia * particle.velocity[j] + cognitive * r1 * (particle.pb_pos[j] - particle.position[j]) + social * r2 * (gb_pos[j] - particle.position[j]); // Calculate the new velocity parameter based on the velocity formula
+                double proposed_velo_param = inertia * swarm.velocities[k][j] + cognitive * r1 * (swarm.pb_pos[k][j] - swarm.positions[k][j]) + social * r2 * (gb_pos[j] - swarm.positions[k][j]); // Calculate the new velocity parameter based on the velocity formula
                 proposed_velocity.push_back(std::min(std::max(proposed_velo_param, -clamp), clamp)); // Update the velocity by adding the new velocity parameter and using clamping limit
 
-                double proposed_pos_param = particle.position[j] + proposed_velocity[j]; // Calculate the new position parameter based on the velocity
+                double proposed_pos_param = swarm.positions[k][j] + proposed_velocity[j]; // Calculate the new position parameter based on the velocity
                 proposed_position.push_back(std::min(std::max(proposed_pos_param, space_min[j]), space_max[j])); // Update the position by adding the new position parameter and using search space limits
             }
 
             double new_value = funct(proposed_position).template cast<double>(); // Calculate the value of the new position
 
-            particle.value = new_value; // Update the particle's value
-            particle.velocity = proposed_velocity; // Update the velocity
-            particle.position = proposed_position; // Update the particle's position
+            swarm.values[k] = new_value; // Update the particle's value
+            swarm.velocities[k] = proposed_velocity; // Update the velocity
+            swarm.positions[k] = proposed_position; // Update the particle's position
 
-            if (new_value > particle.pb_val) { // If the new value is greater than the current personal best value...
-                particle.pb_pos = proposed_position; // Update the personal best position
-                particle.pb_val = new_value; // Update the personal best value
+            if (new_value > swarm.pb_vals[k]) { // If the new value is greater than the current personal best value...
+                swarm.pb_pos[k] = proposed_position; // Update the personal best position
+                swarm.pb_vals[k] = new_value; // Update the personal best value
                 if (new_value > gb_val) { // If the new value is greater than the global best value...
                     gb_val = new_value; // Update the global best value
                     gb_pos = proposed_position; // Update the global best position
